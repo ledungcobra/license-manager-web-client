@@ -21,4 +21,5 @@ export enum AppContractEvents {
     LicenseTokenPriceChange = 'LicenseTokenPriceChange',
     LicenseTokenActivated = 'LicenseTokenActivated',
     LicenseTokenDeActivated = 'LicenseTokenDeActivated',
+    BalanceChange = 'BalanceChange',
 }

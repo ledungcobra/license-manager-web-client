@@ -78,29 +78,25 @@ export class Provider extends React.Component<Props, State> {
         const _isOwner = await contract.isOwner();
         this.setState({isOwner: _isOwner});
 
-        if (_isOwner) {
-            this.setState({
-                items: [
-                    {
-                        label: 'Root Contract',
-                        key: 'home',
-                        icon: <MailOutlined/>,
-                    },
-                    {
-                        label: 'All Apps',
-                        key: 'apps',
-                        icon: <AppstoreOutlined/>,
-                    },
-                    {
-                        label: 'My Apps',
-                        key: 'myapps',
-                        icon: <AppstoreOutlined/>,
-                    },
-                ]
-            })
-        } else {
-            this.setState({items: []})
-        }
+        this.setState({
+            items: [
+                {
+                    label: 'Root Contract',
+                    key: 'home',
+                    icon: <MailOutlined/>,
+                },
+                {
+                    label: 'All Apps',
+                    key: 'apps',
+                    icon: <AppstoreOutlined/>,
+                },
+                {
+                    label: 'My Apps',
+                    key: 'myapps',
+                    icon: <AppstoreOutlined/>,
+                },
+            ]
+        })
 
     }
 
