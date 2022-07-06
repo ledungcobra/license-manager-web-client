@@ -1,12 +1,13 @@
-import { faWindowClose } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Alert, Button, Card, Divider, Form, Input, InputNumber, Select, Skeleton } from "antd";
-import React, { useState } from "react";
-import { RootContractEvents, Unit } from "../@types/types";
-import { IApp } from "../contract-interfaces/IApp";
-import { App } from "../contracts-impl/App";
-import { useAppContext } from "../providers/Provider";
-import { APP_DESCRIPTION, APP_IMG, APP_NAME, APP_PRICE, DURATION_PER_TOKEN, UNIT } from "../utils/Utils";
+import {faWindowClose} from "@fortawesome/free-solid-svg-icons";
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {Alert, Button, Card, Divider, Form, Input, InputNumber, Select, Skeleton} from "antd";
+import React, {useState} from "react";
+import {RootContractEvents, Unit} from "../@types/types";
+import {IApp} from "../contract-interfaces/IApp";
+import {App} from "../contracts-impl/App";
+import {useAppContext} from "../providers/Provider";
+import {APP_DESCRIPTION, APP_IMG, APP_NAME, UNIT} from "../utils/Utils";
+import {useSocketIO} from "../hooks/useSocket";
 
 type Props = {};
 
@@ -31,8 +32,8 @@ const FORM_INITIAL_VALUES: CreateAppLicenseFormField = {
     appName: APP_NAME,
     appImageUrl: APP_IMG,
     description: APP_DESCRIPTION,
-    price: APP_PRICE,
-    duration: DURATION_PER_TOKEN,
+    price: 20,
+    duration: 50,
     unit: UNIT + "",
     secret: "HEllo world",
 };
@@ -45,10 +46,12 @@ interface RootContractState {
 }
 
 const HomePage = ({}: Props) => {
-    const { setState, rootContract, web3, currentAccount } = useAppContext() ?? {};
-    const [alertType, setAlertType] = useState<AlertType>({ type: "none" } as AlertType);
+    const {setState, rootContract, web3, currentAccount} = useAppContext() ?? {};
+    const [alertType, setAlertType] = useState<AlertType>({type: "none"} as AlertType);
+    const socket = useSocketIO(process.env.REACT_APP_VENDER_SOCKET_URL || "ws://localhost:3001")
+    const [socketConnected, setSocketConnected] = useState(false);
 
-    const [showCreateAppDialog, setShowCreateAppDialog] = useState(true);
+    const [isShowCreateAppDialog, setShowCreateAppDialog] = useState(true);
     const [onLoadingCreateNewApp, setOnLoadingCreateNewApp] = useState({} as { withdraw: boolean; createNewApp: boolean });
     const [unitTypeSet, setUnitTypeSet] = useState(UNIT + "");
     const [rootState, setRootState] = useState<RootContractState>({
@@ -65,7 +68,7 @@ const HomePage = ({}: Props) => {
 
         rootContract
             .getApps()
-            .then((apps) => setRootState((prev) => ({ ...prev, apps: [...apps] })))
+            .then((apps) => setRootState((prev) => ({...prev, apps: [...apps]})))
             .catch((e) => {
                 console.log(e);
                 setAlertType({
@@ -78,25 +81,26 @@ const HomePage = ({}: Props) => {
         rootContract
             .isOwner()
             .then((r) => {
-                setRootState((prev) => ({ ...prev, isOwner: r }));
+                setRootState((prev) => ({...prev, isOwner: r}));
             })
             .catch(() => {
-                setRootState({ ...rootState, isOwner: false });
+                setRootState({...rootState, isOwner: false});
             });
-        setRootState((prev) => ({ ...prev, address: rootContract.address, balance: rootContract.balance }));
+        setRootState((prev) => ({...prev, address: rootContract.address, balance: rootContract.balance}));
 
         rootContract
             .listen()
-            .on(RootContractEvents.OnAddedNewApp, async ({ appAddress }) => {
-                console.log("OnAddedNewApp", appAddress);
+            .on(RootContractEvents.OnAddedNewApp, async ({appAddress, owner}) => {
                 const app = new App(web3!, appAddress, currentAccount);
+                console.log("New app address added: ", appAddress, " owner: ", owner);
+
                 await app.fetchData();
-                setRootState((prev) => ({ ...prev, apps: [...prev.apps, app] }));
+                setRootState((prev) => ({...prev, apps: [...prev.apps, app]}));
             })
-            .on(RootContractEvents.OnBalanceChanged, ({ contractAddress, amount }) => {
+            .on(RootContractEvents.OnBalanceChanged, ({contractAddress, amount}) => {
                 console.log(`OnBalanceChanged: ${contractAddress} ${amount}`);
                 if (contractAddress === rootContract.address) {
-                    setRootState((prev) => ({ ...prev, balance: amount }));
+                    setRootState((prev) => ({...prev, balance: amount}));
                 }
             });
         return () => {
@@ -104,8 +108,16 @@ const HomePage = ({}: Props) => {
         };
     }, [rootContract]);
 
+    React.useEffect(() => {
+        if (!socket) {
+            return;
+        }
+        socket.on('connect', () => {
+            setSocketConnected(true)
+        })
+    }, [socket])
     if (!setState || !rootContract) {
-        return <Skeleton />;
+        return <Skeleton/>;
     }
 
     const ownerElements = [
@@ -125,16 +137,16 @@ const HomePage = ({}: Props) => {
 
     const widthDraw = async () => {
         if (!rootState.isOwner) {
-            setAlertType({ type: "error", message: "You are not owner of this contract", title: "Error occur" });
+            setAlertType({type: "error", message: "You are not owner of this contract", title: "Error occur"});
             return;
         }
-        setOnLoadingCreateNewApp({ ...onLoadingCreateNewApp, withdraw: true });
+        setOnLoadingCreateNewApp({...onLoadingCreateNewApp, withdraw: true});
         try {
             await rootContract.withdraw();
         } catch (e: any) {
-            setAlertType({ type: "error", message: e.message, title: "Error occur" });
+            setAlertType({type: "error", message: e.message, title: "Error occur"});
         } finally {
-            setOnLoadingCreateNewApp({ ...onLoadingCreateNewApp, withdraw: false });
+            setOnLoadingCreateNewApp({...onLoadingCreateNewApp, withdraw: false});
         }
     };
 
@@ -151,10 +163,16 @@ const HomePage = ({}: Props) => {
     ];
 
     const onSubmitCreateAppLicense = async (values: CreateAppLicenseFormField) => {
-        console.log(values);
-
+        if (!socketConnected || !socket) {
+            setAlertType({
+                type: "warning",
+                message: "Socket is not connected",
+                title: "",
+            });
+            return
+        }
         values.unit = +values.unit;
-        setOnLoadingCreateNewApp({ ...onLoadingCreateNewApp, createNewApp: true });
+        setOnLoadingCreateNewApp({...onLoadingCreateNewApp, createNewApp: true});
 
         try {
             await rootContract.createNewLicenseToken(
@@ -163,26 +181,46 @@ const HomePage = ({}: Props) => {
                 values.description,
                 values.price,
                 values.duration,
-                values.unit as Unit,
-                values.secret
+                values.unit as Unit
             );
-            setAlertType({
-                type: "success",
-                message: "Create new app success contact the owner of Root Contract to activate your app",
-                title: "",
-            });
+
+            rootContract.listen().on(RootContractEvents.OnAddedNewApp, async ({appAddress, owner}) => {
+                if (!web3) {
+                    setAlertType({
+                        type: "warning",
+                        message: "Web3 was not loaded correctly",
+                        title: "",
+                    });
+                    return
+                }
+                const signature = await web3!!.eth.personal.sign(owner, owner, "")
+                socket.emit("CreateApp", {
+                    appAddress,
+                    signature,
+                    owner,
+                    secret: values.secret
+                })
+                socket.once('AppAdded',data=>{
+                    setAlertType({
+                        type: "success",
+                        message: "Create new app success contact the owner of Root Contract to activate your app",
+                        title: "",
+                    });
+                })
+            })
         } catch (e: any) {
-            setAlertType({ type: "error", message: e.message, title: "An error occurred" });
+            console.log(e);
+            setAlertType({type: "error", message: e.message, title: "An error occurred"});
         } finally {
-            setOnLoadingCreateNewApp({ ...onLoadingCreateNewApp, createNewApp: false });
+            setOnLoadingCreateNewApp({...onLoadingCreateNewApp, createNewApp: false});
             setTimeout(() => {
-                setAlertType({ type: "none", message: "", title: "" });
+                setAlertType({type: "none", message: "", title: ""});
             }, 5000);
         }
     };
 
-    const onFinishFailed = (errorInfo: any) => {
-        console.log("Failed:", errorInfo);
+    const onFinishCreateApFailed = (errorInfo: any) => {
+        console.log("Create app failed", errorInfo);
     };
 
     const createAppDialog = (
@@ -192,25 +230,25 @@ const HomePage = ({}: Props) => {
                 title={"Create new app"}
                 extra={
                     <Button onClick={() => setShowCreateAppDialog(false)}>
-                        <FontAwesomeIcon icon={faWindowClose} />
+                        <FontAwesomeIcon icon={faWindowClose}/>
                     </Button>
                 }
             >
                 <Form
                     name="basic"
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
+                    labelCol={{span: 8}}
+                    wrapperCol={{span: 16}}
                     initialValues={FORM_INITIAL_VALUES}
                     onFinish={onSubmitCreateAppLicense}
-                    onFinishFailed={onFinishFailed}
+                    onFinishFailed={onFinishCreateApFailed}
                     autoComplete="off"
                 >
                     <Form.Item
                         label="App Name"
                         name="appName"
-                        rules={[{ required, message: "Please input your your app name!" }]}
+                        rules={[{required, message: "Please input your your app name!"}]}
                     >
-                        <Input />
+                        <Input/>
                     </Form.Item>
 
                     <Form.Item
@@ -223,7 +261,7 @@ const HomePage = ({}: Props) => {
                             },
                         ]}
                     >
-                        <Input />
+                        <Input/>
                     </Form.Item>
 
                     <Form.Item
@@ -236,7 +274,7 @@ const HomePage = ({}: Props) => {
                             },
                         ]}
                     >
-                        <Input placeholder={"Functionality of your app and your contact number or your company"} />
+                        <Input placeholder={"Functionality of your app and your contact number or your company"}/>
                     </Form.Item>
                     <Form.Item
                         label="Price"
@@ -249,7 +287,7 @@ const HomePage = ({}: Props) => {
                             },
                         ]}
                     >
-                        <InputNumber placeholder="License fee per one token" addonAfter="wei" />
+                        <InputNumber placeholder="License fee per one token" addonAfter="wei"/>
                     </Form.Item>
                     {unitTypeSet !== Unit.FOREVER + "" && (
                         <Form.Item
@@ -281,7 +319,7 @@ const HomePage = ({}: Props) => {
                         ]}
                     >
                         <Select
-                            style={{ width: 120 }}
+                            style={{width: 120}}
                             onChange={(value: string) => setUnitTypeSet(value)}
                             defaultValue={unitTypeSet}
                             placeholder="Unit of license"
@@ -306,11 +344,11 @@ const HomePage = ({}: Props) => {
                     <Form.Item
                         label="App Secret"
                         name="secret"
-                        rules={[{ required: true, message: "App secret must be supply" }]}
+                        rules={[{required: true, message: "App secret must be supply"}]}
                     >
-                        <Input />
+                        <Input/>
                     </Form.Item>
-                    <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
+                    <Form.Item wrapperCol={{offset: 8, span: 16}}>
                         <Button type="primary" htmlType="submit" ghost loading={onLoadingCreateNewApp.createNewApp}>
                             Create
                         </Button>
@@ -325,11 +363,12 @@ const HomePage = ({}: Props) => {
         <>
             <div className="flex flex-wrap gap-2 font-bold w-full mx-auto flex justify-center flex-col items-center">
                 <div className="w-1/2">
-                    {alertType.type !== "none" && <Alert message={alertType.message} type={alertType.type} className="mb-3" />}
-                    {showCreateAppDialog && createAppDialog}
+                    {alertType.type !== "none" &&
+                        <Alert message={alertType.message} type={alertType.type} className="mb-3"/>}
+                    {isShowCreateAppDialog && createAppDialog}
                     <Card size="default" title={"Contract address: " + rootState.address} extra={<a href="#">More</a>}>
                         {ownerElements}
-                        <Divider />
+                        <Divider/>
                         <div className="flex justify-around">
                             {rootState.isOwner && ownerActions}
                             {normalActions}

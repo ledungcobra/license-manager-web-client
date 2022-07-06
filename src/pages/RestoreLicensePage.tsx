@@ -6,7 +6,8 @@ import {useNotificationContext} from "../providers/NotificationProvider";
 import {IApp} from "../contract-interfaces/IApp";
 import {App} from "../contracts-impl/App";
 import AppItem from "../components/AppItem";
-import {generateLicense} from "../utils/Utils";
+import {generateLicense, signData} from "../utils/Utils";
+import {useSocketIO} from "../hooks/useSocket";
 
 type Props = {};
 const useSocketClient = (url: string) => {
@@ -52,7 +53,7 @@ const RestoreLicenseScreen = (props: Props) => {
     const [requestApp, setRequestApp] = React.useState<IApp | null>(null);
 
     const socket = useSocketClient(`http://localhost:${socketPort}/activate`);
-
+    const vendorSocket = useSocketIO(process.env.REACT_APP_VENDER_SOCKET_URL || 'ws://localhost:3001');
     useEffect(() => {
         if (!params || !setState || !web3 || !web3.utils || !notCtx) return
         const accountAddress = params.get("address") ?? '';
@@ -87,10 +88,8 @@ const RestoreLicenseScreen = (props: Props) => {
 
     }, [params, setState, web3, notCtx]);
 
-    const restoreLicense = () =>{
 
-    }
-    const onDoneRestore = async (secret: string) => {
+    const onDoneRestore = async (owner: string) => {
         if (!web3) {
             notCtx.show("Web3 is not initialized", "error");
             return;
@@ -105,13 +104,37 @@ const RestoreLicenseScreen = (props: Props) => {
             notCtx.show("Current account is not initialized", "error");
             return
         }
-        const license = await generateLicense(web3, currentAccount, secret, requestApp!, activateProps!.macAddress);
-        console.log(license)
-        socket.send(JSON.stringify({
-            channel: "OnDoneRestore",
-            message: "Restore license completed",
-            data: license
-        }));
+        if (!vendorSocket){
+            notCtx.show("Vendor socket is not initialized", "error");
+            return
+        }
+        const appAddress = activateProps?.appAddress
+        if(!appAddress) {
+            notCtx.show("App address is not initialized", "error");
+            return
+        }
+
+        const signature = await signData(web3,currentAccount, owner);
+
+        vendorSocket.emit('GetMySecret',{
+            signature,
+            account: currentAccount,
+            appAddress
+        })
+        vendorSocket.once('ReceiveMySecret',async ({error, secret})=>{
+            if(error){
+                notCtx.show(error, "error");
+                return
+            }
+            const license = await generateLicense(web3, owner, secret!,requestApp!, activateProps!.macAddress!);
+            console.log(license)
+            socket.send(JSON.stringify({
+                channel: "OnDoneRestore",
+                message: "Restore license completed",
+                data: license
+            }));
+
+        })
     }
 
     return <div className='w-full flex justify-center'>

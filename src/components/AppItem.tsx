@@ -5,7 +5,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {useLocation, useSearchParams} from "react-router-dom";
 import {AppContractEvents, Unit} from "../@types/types";
 import {IApp} from "../contract-interfaces/IApp";
-import {ActivateProps} from "../pages/ActivatePage";
+import {ActivateProps} from "../pages/PurchasePage";
 import {useNotificationContext} from "../providers/NotificationProvider";
 import {useAppContext} from "../providers/Provider";
 import {convertHexToMacAddress} from "../utils/Utils";
@@ -178,11 +178,10 @@ const AppItem = ({
 
         try {
             notiCtx.setIsLoading(true);
-            app.listen().on(AppContractEvents.LicensePurchased, ({buyer, secret}) => {
+            app.listen().on(AppContractEvents.LicensePurchased, ({buyer}) => {
                 // TODO: delete
-                console.log("Purchased app complete, secret: ", secret, " buyer: ", buyer, "my address", purchaseForm.address);
                 if (buyer?.toLowerCase().trim() === address?.toLowerCase()?.trim()) {
-                    onDoneBuy?.(secret);
+                    onDoneBuy?.(buyer);
                     notiCtx.show("You with address " + buyer + " has purchased license", "success");
                 } else {
                     notiCtx.show("User with address " + buyer + " has purchased license", "success");
@@ -211,9 +210,9 @@ const AppItem = ({
             if (!activateProps?.macAddress.includes(":") && activateProps?.macAddress.startsWith("0x")) {
                 activateProps.macAddress = convertHexToMacAddress(activateProps.macAddress);
             }
-            app.listen().on(AppContractEvents.RestoreLicense, ({owner, secret}) => {
+            app.listen().on(AppContractEvents.RestoreLicense, ({owner}) => {
                 if (currentAccount?.toLowerCase() === owner?.toLowerCase()) {
-                    onDoneRestore?.(secret);
+                    onDoneRestore?.(owner);
                 }
             });
             await app.restoreLicense(activateProps.macAddress);

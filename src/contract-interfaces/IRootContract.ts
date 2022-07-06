@@ -12,8 +12,7 @@ export interface IRootContract extends IEventListener {
 
     owner(): Promise<string>
 
-    createNewLicenseToken: (appName: string, appImageURL: string, appDescription: string, priceInWei: number, durationPerToken: number, unit: Unit,
-                            secret: string) => Promise<any>
+    createNewLicenseToken: (appName: string, appImageURL: string, appDescription: string, priceInWei: number, durationPerToken: number, unit: Unit) => Promise<any>
     withdraw: () => Promise<any>
     getApps: () => Promise<Array<IApp>>
 

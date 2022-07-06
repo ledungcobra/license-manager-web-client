@@ -1,23 +1,25 @@
-import * as React from 'react';
+import { AppstoreOutlined, MailOutlined } from "@ant-design/icons";
+import * as React from "react";
 import Web3 from "web3";
+import { IRootContract } from "../contract-interfaces/IRootContract";
+import { RootContract } from "../contracts-impl/RootContract";
+import RootContractJSON from "../contracts/RootLicense.json";
 import getWeb3 from "../web3";
-import RootContractJSON from '../contracts/RootLicense.json';
-import {IRootContract} from "../contract-interfaces/IRootContract";
-import {RootContract} from '../contracts-impl/RootContract'
-import {MenuProps} from "antd";
-import {AppstoreOutlined, MailOutlined, SettingOutlined} from "@ant-design/icons";
 
 type Props = {
     children: React.ReactNode;
 };
 
-export enum TypeMenu {Admin, Issuer, User}
-
+export enum TypeMenu {
+    Admin,
+    Issuer,
+    User,
+}
 
 type State = {
-    web3?: Web3
-    typeMenu: TypeMenu
-    rootContract: IRootContract
+    web3?: Web3;
+    typeMenu: TypeMenu;
+    rootContract: IRootContract;
     networkId: number;
     accounts: string[];
     title: string;
@@ -28,43 +30,43 @@ type State = {
     currentAccount: string;
 };
 
-
 interface AppState {
-    setState: (data: any) => void
+    setState: (data: any) => void;
 }
 
 // Create Context for AppState
-export const AppStateContext = React.createContext<AppState & State | null>(null);
+export const AppStateContext = React.createContext<(AppState & State) | null>(null);
 export const useAppContext = () => React.useContext(AppStateContext);
 
 export class Provider extends React.Component<Props, State> {
-
     state = {
         web3: {} as Web3,
         typeMenu: TypeMenu.Admin,
         rootContract: {} as IRootContract,
         networkId: 0,
         accounts: [],
-        title: 'Home',
-        subTitle: 'This page is used to create a new app or view list of apps license you own',
+        title: "Home",
+        subTitle: "This page is used to create a new app or view list of apps license you own",
         items: [],
-        currentKey: 'home',
+        currentKey: "home",
         isOwner: false,
-        currentAccount: ''
-    } as State
+        currentAccount: "",
+    } as State;
 
     async componentDidMount() {
-        const web3 = await getWeb3() as Web3;
+        const web3 = (await getWeb3()) as Web3;
         const networkId = await web3.eth.net.getId();
+        console.log(networkId);
+
         // @ts-ignore
-        const address = RootContractJSON.networks[networkId] && RootContractJSON.networks[networkId].address as string
+        const address = RootContractJSON.networks[networkId] && (RootContractJSON.networks[networkId].address as string);
         const licenseRootContract = new web3.eth.Contract(
             // @ts-ignore
             RootContractJSON["abi"],
             address
         );
         const accounts = await web3.eth.getAccounts();
-        const contract = new RootContract(licenseRootContract, accounts[0], address, web3)
+        const contract = new RootContract(licenseRootContract, accounts[0], address, web3);
         await contract.fetchData();
 
         this.setState({
@@ -72,47 +74,45 @@ export class Provider extends React.Component<Props, State> {
             networkId,
             rootContract: contract,
             accounts,
-            currentAccount: accounts[0]
+            currentAccount: accounts[0],
         });
 
         const _isOwner = await contract.isOwner();
-        this.setState({isOwner: _isOwner});
+        this.setState({ isOwner: _isOwner });
 
         this.setState({
             items: [
                 {
-                    label: 'Root Contract',
-                    key: 'home',
-                    icon: <MailOutlined/>,
+                    label: "Root Contract",
+                    key: "home",
+                    icon: <MailOutlined />,
                 },
                 {
-                    label: 'All Apps',
-                    key: 'apps',
-                    icon: <AppstoreOutlined/>,
+                    label: "All Apps",
+                    key: "apps",
+                    icon: <AppstoreOutlined />,
                 },
                 {
-                    label: 'My Apps',
-                    key: 'myapps',
-                    icon: <AppstoreOutlined/>,
+                    label: "My Apps",
+                    key: "myapps",
+                    icon: <AppstoreOutlined />,
                 },
-            ]
-        })
-
+            ],
+        });
     }
 
     update = (data: any) => {
-        this.setState(data)
-    }
-
+        this.setState(data);
+    };
 
     render() {
         return (
-            <AppStateContext.Provider value={
-                {
-                    ...(this.state),
-                    setState: this.update
-                }
-            }>
+            <AppStateContext.Provider
+                value={{
+                    ...this.state,
+                    setState: this.update,
+                }}
+            >
                 {this.props.children}
             </AppStateContext.Provider>
         );

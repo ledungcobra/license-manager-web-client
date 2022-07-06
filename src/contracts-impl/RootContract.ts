@@ -36,16 +36,12 @@ export class RootContract implements IRootContract {
                                 appDescription: string,
                                 priceInWei: number,
                                 durationPerToken: number,
-                                unit: Unit, secret: string): Promise<any> {
+                                unit: Unit): Promise<any> {
         if (priceInWei < 0) {
             return Promise.reject("Price must greater than or equal to zero wei");
         }
 
-        if (secret.length === 0) {
-            return Promise.reject("Secret must not be empty");
-        }
-
-        return this._contract.methods.createNewLicenseToken(appName, appImageURL, appDescription, priceInWei, durationPerToken, unit, secret).send({
+        return this._contract.methods.createNewLicenseToken(appName, appImageURL, appDescription, priceInWei, durationPerToken, unit).send({
             from: this.userAddress,
             value: this._licenseRegistrationFee
         })
