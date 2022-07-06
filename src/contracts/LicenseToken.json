@@ -16230,7 +16230,7 @@
   },
   "networks": {},
   "schemaVersion": "3.4.7",
-  "updatedAt": "2022-07-06T10:09:23.030Z",
+  "updatedAt": "2022-07-06T13:52:12.448Z",
   "devdoc": {
     "methods": {
       "allowance(address,address)": {
